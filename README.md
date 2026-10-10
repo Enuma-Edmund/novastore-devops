@@ -1,14 +1,12 @@
-# NovaStore — Retail E-Commerce DevOps Modernization
+# NovaStore Retail E-Commerce DevOps Modernization
 
 **Full-Stack Application | AWS Cloud | Terraform | CI/CD | DevSecOps | Kubernetes | GitOps | Automation**
 
 ## Project Overview
 
-NovaStore is a full-stack retail e-commerce application used to demonstrate how DevOps engineering practices modernize application delivery, infrastructure management, security, and operational reliability.
+NovaStore is a retail e-commerce modernization initiative focused on transforming a legacy Java application running on manually managed infrastructure into a scalable, secure, and automated cloud-based platform on AWS. The modernization addresses slow and risky deployments, inconsistent server configurations, limited scalability, and reactive monitoring through Infrastructure as Code, CI/CD automation, containerization, Kubernetes, and proactive observability. 
 
-The application combines a **React storefront**, **Java 17 / Spring Boot REST API**, and **PostgreSQL database** with AWS infrastructure, automated delivery pipelines, container orchestration, configuration management, security scanning, and observability.
-
-The engineering focus is not simply deploying an application. It is addressing the operational challenges that make enterprise applications difficult to release, scale, secure, and support.
+The application is a full-stack retail e-commerce application designed to deliver a scalable, secure, and reliable online shopping experience through modern cloud infrastructure, automated application delivery, and resilient operational architecture. It combines a **React storefront**, **Java 17 / Spring Boot REST API**, and **PostgreSQL database** with AWS infrastructure, automated delivery pipelines, container orchestration, configuration management, security scanning, and observability.
 
 ## Business Problem
 
@@ -24,7 +22,7 @@ Traditional application environments face several recurring operational challeng
 | Poor monitoring and visibility | Engineers take longer to identify and investigate failures |
 | Difficult release recovery | Failed changes increase downtime and operational risk |
 
-**Engineering objective:** Build repeatable infrastructure and application delivery workflows with security controls, automation, operational visibility, and documented troubleshooting procedures.
+**Engineering objective:** To address operational challenges that make enterprise applications difficult to release, scale, secure and support by building repeatable infrastructure and application delivery workflows with security controls, automation, operational visibility, and documented troubleshooting procedures.
 
 ## Engineering Solutions
 
@@ -49,11 +47,10 @@ Traditional application environments face several recurring operational challeng
 
 The architecture illustrates the application, AWS infrastructure, CI/CD, container deployment, security, and monitoring components represented in the engineering work.
 
-The repository contains both ECS/Fargate and EKS implementation paths. These represent platform options and engineering exercises; they should not be interpreted as proof that every component is currently running simultaneously.
 
 ## How NovaStore Works
 
-NovaStore demonstrates two AWS container deployment approaches built around a shared application delivery process.
+NovaStore supports two alternative AWS container deployment architectures: ECS/Fargate and EKS/Kubernetes, built around a shared CI/CD workflow.
 
 ### Shared CI/CD Workflow
 
@@ -88,7 +85,7 @@ NovaStore demonstrates two AWS container deployment approaches built around a sh
 - Kubernetes Services and Ingress resources define how traffic reaches the application.
 - Health probes and Horizontal Pod Autoscaler configuration support workload health and scaling.
 
-**Engineering decision:** EKS is appropriate when teams need Kubernetes capabilities, declarative workload management, extensibility, or a standardized platform shared across multiple applications.
+**Engineering decision:** **Engineering decision:** EKS is suitable for organizations prioritizing long-term platform flexibility, Kubernetes ecosystem integration, and complex workload orchestration. It supports established tools such as Helm for application packaging, Argo CD for GitOps, and Prometheus for monitoring, while enabling standardized operations across multiple applications and environments.
 
 **Implementation:** [EKS Terraform modules](terraform/modules/eks/) | [Helm chart](helm/java-app/) | [Argo CD application](argocd/novastore-java.yaml)
 
@@ -96,7 +93,7 @@ NovaStore demonstrates two AWS container deployment approaches built around a sh
 
 - **Ansible:** Configures and maintains Linux servers through repeatable automation.
 - **CloudWatch, Prometheus, Grafana:** Provide monitoring and operational visibility.
-- **Gitleaks, Trivy, Checkov, SonarQube:** Support security and code-quality checks.
+- **Gitleaks, Trivy, Checkov, SonarQube:** Support security and code quality checks.
 - **Troubleshooting:** Eight engineering investigations document deployment, IAM, networking, container, and GitOps issues.
 
 **Deployment status:** Both paths are represented in the repository. AWS resources are currently shut down to control costs; this section describes the configured architecture rather than an active public deployment.
@@ -114,6 +111,7 @@ NovaStore demonstrates two AWS container deployment approaches built around a sh
 | Helm and Argo CD | Declarative Kubernetes packaging and Git-based reconciliation |
 | Gitleaks, Trivy, Checkov, SonarQube | Complementary checks for secrets, vulnerabilities, IaC misconfiguration, and code quality |
 | CloudWatch, Prometheus, Grafana | Signals for health, diagnosis, and capacity decisions |
+Python / Boto3	| Automated AWS EC2 instance discovery and inventory retrieval through AWS APIs, reducing manual infrastructure inspection and supporting operational automation.
 
 ## Repository Navigation
 
@@ -326,4 +324,4 @@ The case studies distinguish confirmed configuration changes from diagnostic pro
 | AWS EC2 dynamic inventory | Configuration included; live execution verification not yet documented |
 | Engineering documentation | Published in repository |
 
-**Portfolio scope:** This repository documents implemented engineering work, verified local checks, configured cloud workflows, and troubleshooting investigations. It does not represent a continuously running production service.
+**Portfolio scope:** This repository documents implemented engineering work, verified local checks, configured cloud workflows, and troubleshooting investigations. 
