@@ -128,6 +128,8 @@ Python / Boto3	| Automated AWS EC2 instance discovery and inventory retrieval th
 | [`kubernetes/`](kubernetes/) | Kubernetes manifests |
 | [Troubleshooting cases](docs/troubleshooting/README.md) | Eight engineering investigations |
 
+**AWS Deployment Guide:** [Step-by-step deployment and verification](docs/deployment-guide.md)
+
 ## Getting Started & Validation
 
 Run only the checks relevant to the components you want to inspect. AWS deployment requires your own account configuration and is **not** required for local validation.
