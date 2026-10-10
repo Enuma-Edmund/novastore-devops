@@ -1,175 +1,463 @@
 # NovaStore — AWS Deployment Guide
 
-This guide describes how to prepare, provision, deploy, validate, and clean up the NovaStore retail e-commerce environment.
+This guide covers local builds, AWS infrastructure preparation, image publishing, ECS/Fargate and EKS/Kubernetes deployment, verification, troubleshooting, and cleanup for the NovaStore retail e-commerce application.
 
-NovaStore supports two alternative AWS container deployment architectures: **ECS/Fargate** and **EKS/Kubernetes**. Both use the Java Spring Boot application and AWS infrastructure defined in this repository.
+NovaStore has two container deployment paths: **ECS/Fargate** and **EKS/Kubernetes**. The development Terraform root includes resources for both paths and supporting services. Applying that root may provision both platforms and incur significant AWS charges; review the complete plan before proceeding.
 
-> **Deployment verification:** Local application builds, Terraform validation, and Helm linting have been verified. A fresh end-to-end AWS deployment from this public repository has not yet been validated. Review environment-specific configuration before provisioning resources.
+> Run commands from the repository root unless otherwise stated. Replace example values with settings from your own AWS environment. Commands that require existing AWS infrastructure are explicitly labeled.
 
-## 1. Prerequisites
+## 1. Prerequisites and AWS identity
 
-- An AWS account with appropriate permissions
-- AWS CLI configured with credentials for the target account
-- Terraform
-- Docker
-- Java 17 and Maven
-- Git
-- Helm and kubectl for Kubernetes deployments
-- Access to Amazon ECR
-- An AWS region and environment-specific configuration
+Install Git, Java 17, Maven, Node.js/npm, Docker, AWS CLI, Terraform, Helm, kubectl, and jq. Confirm tool availability:
 
-Confirm the AWS identity before provisioning:
+```bash
+git --version
+java -version
+mvn -version
+node --version
+npm --version
+docker --version
+aws --version
+terraform version
+helm version
+kubectl version --client
+jq --version
+```
 
-    aws sts get-caller-identity
+Set the target region and AWS profile:
 
-Select the intended AWS region:
+```bash
+export AWS_PROFILE=default
+export AWS_REGION=us-east-2
+aws sts get-caller-identity
+aws configure get region --profile "$AWS_PROFILE"
+```
 
-    export AWS_REGION=us-east-2
-    aws configure get region
+Confirm the account ID and principal match the account you intend to use. Never commit AWS credentials.
 
-## 2. Review the Repository
+## 2. Obtain and inspect the source
 
-Key implementation locations:
+```bash
+git clone https://github.com/Enuma-Edmund/novastore-devops.git
+cd novastore-devops
+git status --short
+git log -1 --oneline
+ls app frontend terraform helm/java-app .github/workflows
+```
 
-- `app/` — Java Spring Boot application
-- `frontend/` — React storefront
-- `terraform/` — AWS infrastructure definitions
-- `Jenkinsfile` — Jenkins pipeline
-- `.github/workflows/` — GitHub Actions workflows
-- `helm/java-app/` — Helm chart
-- `argocd/` — Argo CD configuration
-- `ansible/` — Server configuration automation
+Major components:
 
-Review Terraform variables, IAM permissions, image references, networking settings, and environment-specific identifiers before deployment.
+| Path | Responsibility |
+| --- | --- |
+| `app/` | Java/Spring Boot backend and Dockerfile |
+| `frontend/` | React storefront |
+| `terraform/environments/dev/` | AWS development infrastructure root |
+| `terraform/modules/` | Reusable AWS resource definitions |
+| `helm/java-app/` | Kubernetes application chart |
+| `argocd/` | Argo CD GitOps configuration |
+| `Jenkinsfile` | Jenkins CI/CD pipeline |
+| `.github/workflows/` | GitHub Actions workflows |
+| `ansible/` | Linux configuration automation |
+| `docs/troubleshooting/` | Troubleshooting investigations |
 
-## 3. Build and Validate the Application
+## 3. Build and test the application locally
 
-Build and test the Java application:
+Build and test the Java backend:
 
-    cd app
-    mvn clean package
-    cd ..
+```bash
+cd app
+mvn --batch-mode clean verify
+cd ..
+```
 
-Build the Docker image:
+Successful tests end with `BUILD SUCCESS`. Build and inspect the backend image:
 
-    docker build -t novastore-api:local ./app
+```bash
+docker build -t novastore-api:local ./app
+docker image inspect novastore-api:local \
+  --format 'User={{.Config.User}} Ports={{json .Config.ExposedPorts}}'
+```
 
-These commands validate the application build and image packaging. They do not deploy the application to AWS.
+The backend depends on PostgreSQL. Inspect `compose.yaml` and the application's database configuration before starting the local stack. Set required environment variables in an untracked local `.env` file; never use production secrets for testing.
 
-## 4. Prepare AWS Infrastructure with Terraform
+```bash
+docker compose config --services
+docker compose up -d postgres
+docker compose ps
+docker compose logs --tail=50 postgres
+```
 
-Initialize the development configuration without activating its remote backend:
+If the Compose service has a different name, use the name shown by `docker compose config --services`. Stop the local stack without deleting persistent volumes:
 
-    terraform -chdir=terraform/environments/dev init -backend=false
+```bash
+docker compose down
+```
 
-Validate the Terraform configuration:
+Build the React frontend:
 
-    terraform -chdir=terraform/environments/dev validate
+```bash
+cd frontend
+npm ci
+npm run lint --if-present
+npm run build
+cd ..
+```
 
-Before an actual deployment:
+The backend container deployment paths below do not by themselves publish the React storefront; frontend hosting and routing are separate deployment concerns.
 
-1. Review the development environment's backend configuration.
-2. Supply the required Terraform variable values.
-3. Replace example account identifiers and other placeholders.
-4. Confirm IAM permissions and AWS resource quotas.
-5. Review networking, NAT Gateway, load balancer, and Kubernetes costs.
-6. Initialize the intended backend and review a Terraform plan.
+## 4. Validate Terraform and review the infrastructure plan
 
-Do not apply Terraform until the plan has been reviewed and the required configuration has been supplied.
+Run static validation from the repository root:
 
-## 5. Build and Publish the Container Image
+```bash
+terraform -chdir=terraform/environments/dev init -backend=false
+terraform -chdir=terraform/environments/dev fmt -check
+terraform -chdir=terraform/environments/dev validate
+```
 
-The delivery workflows define the intended process:
+Inspect the environment configuration and inputs:
 
-1. Retrieve application source from GitHub.
-2. Build and test the application.
-3. Run configured security and quality checks.
-4. Build the Docker image.
-5. Authenticate to Amazon ECR.
-6. Tag and publish the image.
-7. Deploy the selected application version.
+```bash
+ls terraform/environments/dev
+sed -n '1,220p' terraform/environments/dev/variables.tf
+sed -n '1,240p' terraform/environments/dev/main.tf
+```
 
-Implementation references:
+Before provisioning, configure the intended Terraform backend, required variables, AWS account references, IAM permissions, subnet availability zones, administrator CIDR, ECR image URI, and resource quotas. Use a private, untracked `.tfvars` file appropriate to your environment. Do not assume sample values will produce a valid or affordable deployment.
 
-- `Jenkinsfile`
-- `.github/workflows/`
-- `app/Dockerfile`
+From the development environment directory, initialize the actual backend and inspect a plan:
 
-The ECR repository, account, region, image tag, and deployment credentials must match the target environment.
+```bash
+cd terraform/environments/dev
+terraform init
+terraform plan -var-file=terraform.tfvars -out=novastore.tfplan
+terraform show novastore.tfplan
+cd ../../..
+```
 
-## 6. Deployment Option A — Amazon ECS/Fargate
+**Only after reviewing the complete plan**, provision explicitly:
 
-**Traffic flow:** Internet → ALB → ECS Service → Fargate Task → Spring Boot application
+```bash
+# cd terraform/environments/dev
+# terraform apply novastore.tfplan
+# cd ../../..
+```
 
-Deployment sequence:
+A full apply of the current development root may create ECS, EKS, load balancers, NAT gateways, EC2 services, and related infrastructure. It is not a single-platform switch. Do not use Terraform `-target` as a permanent architecture-selection method.
 
-1. Provision the required VPC, subnets, IAM, ALB, ECR, and ECS resources.
-2. Publish the application image to Amazon ECR.
-3. Configure the ECS task definition to reference the published image.
-4. Configure the ECS service, networking, target group, and health checks.
-5. Deploy or update the ECS service.
-6. Verify that tasks reach the RUNNING state and ALB targets become healthy.
+## 5. Build, tag, and publish a Docker image to ECR
 
-Relevant infrastructure is defined under `terraform/`.
+**Requires:** An ECR repository already created in the intended AWS account and region.
 
-ECS/Fargate is an alternative to the Kubernetes deployment path; both paths do not need to be provisioned for a single application deployment.
+Choose the repository name from the Terraform output or actual AWS configuration, rather than assuming a name:
 
-## 7. Deployment Option B — Amazon EKS/Kubernetes
+```bash
+export AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+export ECR_REPOSITORY=novastore-dev-app   # Confirm against your Terraform configuration
+export IMAGE_TAG="$(git rev-parse --short=12 HEAD)"
+export IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-**Traffic flow:** Internet → ALB → Ingress → Kubernetes Service → Pod → Spring Boot application
+aws ecr describe-repositories \
+  --repository-names "$ECR_REPOSITORY" \
+  --region "$AWS_REGION"
+```
 
-Deployment sequence:
+Authenticate, build, and push:
 
-1. Provision the required AWS networking, IAM, ECR, and EKS resources.
-2. Configure kubectl access to the intended EKS cluster.
-3. Publish the application image to Amazon ECR.
-4. Update the Helm image repository, tag, and environment-specific values.
-5. Confirm Kubernetes Secrets and required dependencies are configured.
-6. Deploy the Helm release using the intended environment values.
-7. Verify Pods, Services, Ingress, and application health.
-8. If using Argo CD, configure repository access and confirm synchronization.
+```bash
+aws ecr get-login-password --region "$AWS_REGION" | \
+  docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-Validate the Helm chart locally:
+cd app
+mvn --batch-mode clean package
+cd ..
 
-    helm lint helm/java-app
-    helm template novastore helm/java-app
+docker build -t novastore-api:local ./app
+docker tag novastore-api:local "$IMAGE_URI"
+docker push "$IMAGE_URI"
+```
 
-Review the Helm chart and Argo CD manifests before executing deployment commands against a live cluster.
+Verify the image exists:
 
-## 8. Verify the Deployment
+```bash
+aws ecr describe-images \
+  --repository-name "$ECR_REPOSITORY" \
+  --image-ids imageTag="$IMAGE_TAG" \
+  --region "$AWS_REGION"
+```
 
-For the selected deployment platform, confirm:
+Ensure the ECS task definition or Helm values reference this exact image. The repository includes historical image references that must be aligned with the image you publish.
 
-- Application containers start successfully
-- Application health checks pass
-- Load balancer targets are healthy
-- The application responds through the expected endpoint
-- Database connectivity works
-- Application logs show no startup errors
-- Monitoring and alerting are configured appropriately
+## 6. ECS/Fargate deployment path
 
-Record the deployed image version and the results of smoke tests.
+**Traffic path:** Internet → Application Load Balancer → Target Group → ECS Service → Fargate Task → Spring Boot API.
 
-## 9. Troubleshooting
+**Requires:** VPC, subnets, IAM roles, ECR image, ALB, target group, ECS cluster/service, task networking, database connectivity, and appropriate security groups.
 
-Review the engineering investigations in:
+Inspect the actual names from Terraform outputs:
 
-`docs/troubleshooting/README.md`
+```bash
+cd terraform/environments/dev
+terraform output
+terraform output -raw ecs_cluster_name
+terraform output -raw ecs_service_name
+terraform output -raw ecs_alb_url
+cd ../../..
+```
 
-Topics include IAM permissions, container images, application health, Kubernetes networking, ALB routing, and Argo CD synchronization.
+Set names using the output values (adjust if your environment differs):
 
-## 10. Infrastructure Cleanup
+```bash
+export ECS_CLUSTER=novastore-dev-cluster
+export ECS_SERVICE=novastore-dev-service
 
-When the environment is no longer needed:
+aws ecs describe-clusters \
+  --clusters "$ECS_CLUSTER" --region "$AWS_REGION"
+aws ecs describe-services \
+  --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+  --region "$AWS_REGION"
+```
 
-1. Confirm the correct AWS account, region, and environment.
-2. Identify any resources or data that must be retained.
-3. Review the Terraform destroy plan.
-4. Remove the intended resources using the corresponding Terraform state.
-5. Confirm that billable resources have been removed.
+Wait for service stability and inspect tasks:
 
-**Warning:** Destruction can permanently remove infrastructure and data. Never run cleanup commands against an unverified environment.
+```bash
+aws ecs wait services-stable \
+  --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+  --region "$AWS_REGION"
 
-## Deployment Status
+aws ecs list-tasks \
+  --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" \
+  --desired-status RUNNING --region "$AWS_REGION"
+```
 
-The repository provides implementation code and validation instructions for both deployment architectures. Fresh end-to-end provisioning and deployment from this repository require additional environment-specific verification.
+Inspect CloudWatch logs (confirm the log-group name from the Terraform output):
+
+```bash
+aws logs tail /ecs/novastore-dev --since 30m --region "$AWS_REGION"
+```
+
+Smoke-test the ALB endpoint after the application and database are ready:
+
+```bash
+cd terraform/environments/dev
+ALB_URL="$(terraform output -raw ecs_alb_url)"
+cd ../../..
+curl -i "${ALB_URL%/}/health"
+```
+
+Check ECS service events, stopped task reasons, ALB target health, application port, database connectivity, and logs if the request fails. An HTTP 200 from the health endpoint is an application-level check; it does not replace a full end-to-end storefront test.
+
+## 7. EKS/Kubernetes deployment path
+
+**Traffic path:** Internet → ALB → Kubernetes Ingress → Service → Spring Boot Pods.
+
+**Requires:** EKS cluster and worker nodes, ECR image access, database connectivity, Kubernetes Secrets, metrics components for HPA, and the AWS Load Balancer Controller for ALB-backed Ingress.
+
+Configure cluster access:
+
+```bash
+export EKS_CLUSTER=novastore-dev-eks  # Confirm against Terraform output
+aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+kubectl config current-context
+kubectl get nodes -o wide
+```
+
+Verify the ALB controller if enabling Ingress:
+
+```bash
+kubectl get deployment aws-load-balancer-controller -n kube-system
+```
+
+The controller's IAM role is not the same as an installed controller. If the deployment is missing, follow the AWS Load Balancer Controller installation procedure and verify its service account permissions and subnet discovery.
+
+Lint and render the chart before deployment:
+
+```bash
+helm lint helm/java-app
+helm template novastore helm/java-app
+```
+
+Inspect the actual chart's Deployment and Service names before using commands that reference them:
+
+```bash
+helm template novastore helm/java-app | grep -E '^kind:|^  name:'
+```
+
+With dependencies configured, deploy the image built in Section 5:
+
+```bash
+helm upgrade --install novastore helm/java-app \
+  --namespace default \
+  --set image.repository="${ECR_REGISTRY}/${ECR_REPOSITORY}" \
+  --set image.tag="$IMAGE_TAG" \
+  --wait --timeout 10m
+```
+
+Verify the resulting resources:
+
+```bash
+kubectl get deployments,pods,services,ingress
+kubectl get events --sort-by=.lastTimestamp | tail -30
+kubectl get hpa
+```
+
+Use the Deployment and Service names printed by `kubectl get` for the following checks:
+
+```bash
+# Replace <deployment-name> and <service-name> with actual values:
+# kubectl rollout status deployment/<deployment-name> --timeout=300s
+# kubectl logs deployment/<deployment-name> --tail=100
+# kubectl port-forward service/<service-name> 8080:80
+```
+
+In a second terminal, after starting port-forwarding:
+
+```bash
+curl -i http://localhost:8080/health
+```
+
+A functioning ALB Ingress also requires appropriate controller permissions, subnet tags, and security-group routing.
+
+## 8. Argo CD and CI/CD alignment
+
+The repository includes `argocd/novastore-java.yaml`. Inspect its Git URL, target revision, chart path, destination namespace, and Helm image values before applying:
+
+```bash
+cat argocd/novastore-java.yaml
+```
+
+After installing Argo CD and configuring Git access:
+
+```bash
+kubectl apply -f argocd/novastore-java.yaml
+kubectl get applications -n argocd
+kubectl describe application novastore-java -n argocd
+```
+
+Ensure the Git revision in the manifest exists. The checked configuration has previously referenced `feature/retail-fullstack`; use the intended maintained branch for new deployments.
+
+GitHub Actions and Jenkins handle build, tests, scanning, and image publishing; Argo CD continuously reconciles the Kubernetes desired state. Inspect the implementation:
+
+```bash
+cat .github/workflows/ci.yml
+cat Jenkinsfile
+```
+
+**Configuration alignment to check:** The GitHub Actions ECR publishing trigger has been configured for `develop`, while the Terraform GitHub OIDC trust configuration has allowed `main`. Those must agree before relying on automated ECR publishing. Checkov has been configured with `soft_fail: true`, meaning findings do not necessarily block the workflow. These are implementation decisions to review, not reasons to assume an automated release occurred.
+
+## 9. Deployment verification checklist
+
+For the selected platform, confirm:
+
+1. The intended image tag exists in ECR and is referenced by the running workload.
+2. ECS tasks or Kubernetes Pods are running and ready.
+3. Application logs contain no unresolved startup errors.
+4. Database connectivity and required Secrets work.
+5. Health endpoint responds through the intended Service/ALB path.
+6. ALB target groups are healthy and security groups allow the required ports.
+7. Monitoring and alert routing are configured for the target environment.
+8. The application endpoint passes a smoke test after the release.
+
+Capture the deployed image tag, environment, timestamp, and smoke-test result for an auditable release record.
+
+## 10. Troubleshooting commands
+
+### Backend build or container startup
+
+```bash
+cd app && mvn --batch-mode clean verify && cd ..
+docker build --progress=plain -t novastore-api:debug ./app
+```
+
+Check Java version, dependency resolution, Dockerfile JAR path, environment variables, database connection, and the actual application listening port.
+
+### ECR authentication or image pull
+
+```bash
+aws sts get-caller-identity
+aws ecr describe-images \
+  --repository-name "$ECR_REPOSITORY" \
+  --image-ids imageTag="$IMAGE_TAG" \
+  --region "$AWS_REGION"
+```
+
+Check account/region mismatch, ECR repository and tag, task execution role or node IAM permissions, and network egress.
+
+### ECS tasks failing or ALB unhealthy
+
+```bash
+aws ecs describe-services \
+  --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+  --region "$AWS_REGION"
+aws logs tail /ecs/novastore-dev --since 30m --region "$AWS_REGION"
+```
+
+Check task stopped reasons, target group health, health-check path, container port, security groups, and PostgreSQL connectivity.
+
+### Kubernetes Pending, ImagePullBackOff, or no Service endpoints
+
+```bash
+kubectl get pods -o wide
+kubectl describe pods
+kubectl get nodes
+kubectl get services,endpointslices
+kubectl get events --sort-by=.lastTimestamp | tail -30
+```
+
+Check resource requests, node capacity, image URI, ECR access, readiness probes, Service selectors, and target port.
+
+### Ingress exists but no ALB
+
+```bash
+kubectl get ingress
+kubectl describe ingress
+kubectl get deployment aws-load-balancer-controller -n kube-system
+```
+
+Check controller installation, IAM permissions, ingress class, subnet discovery, and AWS controller logs.
+
+### Argo CD OutOfSync
+
+Compare the Git-defined manifests and Helm values with the live cluster. Prefer correcting Git desired state over making persistent manual changes to GitOps-managed resources.
+
+See [Engineering Troubleshooting and Incident Response](troubleshooting/README.md) for project investigation narratives.
+
+## 11. Rollback
+
+For Helm-based releases, inspect release history and select a known-good revision:
+
+```bash
+helm history novastore
+# Replace REVISION with a confirmed earlier revision:
+# helm rollback novastore REVISION --wait
+```
+
+For ECS, restore the last known-good task definition/image through the established release process and ensure Terraform configuration will not immediately overwrite the rollback. For Argo CD, revert the desired state in Git and allow reconciliation.
+
+## 12. Cleanup and cost control
+
+**Destructive operations require account and Terraform state verification.** Removing AWS resources may permanently delete data. Kubernetes-created ALBs may need controller-managed cleanup before EKS is destroyed.
+
+```bash
+aws sts get-caller-identity
+cd terraform/environments/dev
+terraform plan -destroy -var-file=terraform.tfvars
+```
+
+Review the complete destroy plan and confirm it applies only to the intended NovaStore environment. If authorized, perform cleanup:
+
+```bash
+# terraform destroy -var-file=terraform.tfvars
+```
+
+Check the AWS console and billing for resources left outside Terraform management, including load balancers, EBS volumes, ECR storage, CloudWatch logs, and NAT gateways.
+
+## Engineering references
+
+- [Terraform infrastructure](../terraform/)
+- [GitHub Actions](../.github/workflows/ci.yml)
+- [Jenkins pipeline](../Jenkinsfile)
+- [Helm chart](../helm/java-app/)
+- [Argo CD application](../argocd/novastore-java.yaml)
+- [Troubleshooting investigations](troubleshooting/README.md)
