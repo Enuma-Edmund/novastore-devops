@@ -51,6 +51,93 @@ The architecture illustrates the application, AWS infrastructure, CI/CD, contain
 
 The repository contains both ECS/Fargate and EKS implementation paths. These represent platform options and engineering exercises; they should not be interpreted as proof that every component is currently running simultaneously.
 
+## How NovaStore Works
+
+NovaStore illustrates the path from an application change to a controlled cloud release. The repository includes alternative ECS/Fargate and EKS deployment configurations; these are not claims that both environments are currently running.
+
+1. **Develop:** React storefront, Spring Boot API, and PostgreSQL changes are maintained in Git.
+2. **Validate:** GitHub Actions and Jenkins workflows build, test, and perform configured security checks.
+3. **Package:** Docker packages the Java service; Amazon ECR is the configured container registry.
+4. **Deploy:** ECS/Fargate and EKS provide different container deployment approaches. Helm packages Kubernetes resources and Argo CD defines GitOps reconciliation.
+5. **Operate:** Ansible automates Linux server configuration and maintenance; CloudWatch, Prometheus, and Grafana support operational visibility.
+6. **Investigate:** Eight case studies document troubleshooting decisions and distinguish confirmed fixes from diagnostic procedures.
+
+## Engineering Decisions — Why These Tools?
+
+| Decision | Engineering reasoning |
+|---|---|
+| Terraform | Reproducible infrastructure definitions instead of error-prone manual provisioning |
+| Ansible | Consistent Linux server configuration and repeatable maintenance tasks |
+| EC2 dynamic inventory configuration | Discovery-based host selection rather than hardcoded IP lists; live execution is not established by the configuration alone |
+| Docker and ECR | Consistent application packaging and a central container registry |
+| ECS/Fargate versus EKS | Different operational tradeoffs; platform choice depends on requirements and team capacity |
+| Jenkins and GitHub Actions | Alternative CI/CD implementations and integrations |
+| Helm and Argo CD | Declarative Kubernetes packaging and Git-based reconciliation |
+| Gitleaks, Trivy, Checkov, SonarQube | Complementary checks for secrets, vulnerabilities, IaC misconfiguration, and code quality |
+| CloudWatch, Prometheus, Grafana | Signals for health, diagnosis, and capacity decisions |
+
+## Repository Navigation
+
+| Location | Contents |
+|---|---|
+| [`app/`](app/) | Spring Boot API, database migration, and tests |
+| [`frontend/`](frontend/) | React retail storefront |
+| [`terraform/`](terraform/) | AWS infrastructure modules and environment configurations |
+| [`ansible/`](ansible/) | Server automation, maintenance playbook, and inventory configurations |
+| [`Jenkinsfile`](Jenkinsfile) | Jenkins pipeline |
+| [GitHub Actions](.github/workflows/ci.yml) | CI and security workflow |
+| [`helm/java-app/`](helm/java-app/) | Kubernetes Helm chart |
+| [`argocd/`](argocd/) | GitOps application definition |
+| [`kubernetes/`](kubernetes/) | Kubernetes manifests |
+| [Troubleshooting cases](docs/troubleshooting/README.md) | Eight engineering investigations |
+
+## Getting Started & Validation
+
+Run only the checks relevant to the components you want to inspect. AWS deployment requires your own account configuration and is **not** required for local validation.
+
+**Java application build** (Java 17 and Maven):
+
+```bash
+cd app
+mvn clean package
+cd ..
+```
+
+**Docker image build** (Docker):
+
+```bash
+docker build -t novastore-api:local ./app
+```
+
+**Terraform configuration** (Terraform; may download providers):
+
+```bash
+terraform -chdir=terraform/environments/dev init -backend=false
+terraform -chdir=terraform/environments/dev validate
+```
+
+**Helm chart** (Helm):
+
+```bash
+helm lint helm/java-app
+helm template novastore helm/java-app
+```
+
+These checks do not establish a live AWS deployment. Example account IDs and inventory addresses must be replaced for actual deployment.
+
+## Verified Engineering Outcomes
+
+| Check | Result |
+|---|---|
+| Java package build | Passed during project work |
+| Local Docker image build | Passed during project work |
+| Terraform development configuration | `init -backend=false` and `validate` passed |
+| Helm chart | `helm lint` passed with zero failures |
+| GitHub Actions CI | Successful run reported during project work; review current workflow status separately |
+| Public-copy secret scan | Gitleaks reported no leaks detected |
+
+---
+
 ## Engineering Implementation & Results
 
 ### 1. Application Engineering
@@ -185,7 +272,6 @@ The case studies distinguish confirmed configuration changes from diagnostic pro
 - [CI/CD workflows](.github/workflows/ci.yml)
 - [Helm deployment configuration](helm/java-app/)
 
-Screenshot links are intentionally omitted until verified screenshots are added to the repository.
 
 ## Project Status
 
@@ -199,6 +285,6 @@ Screenshot links are intentionally omitted until verified screenshots are added 
 | AWS infrastructure and deployment workflows | Implemented/configured; no active live deployment |
 | Ansible server configuration | Implemented and used to configure Linux servers |
 | AWS EC2 dynamic inventory | Configuration included; live execution verification not yet documented |
-| Engineering documentation | Published in repository; supporting screenshots not yet included |
+| Engineering documentation | Published in repository |
 
 **Portfolio scope:** This repository documents implemented engineering work, verified local checks, configured cloud workflows, and troubleshooting investigations. It does not represent a continuously running production service.
