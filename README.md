@@ -8,6 +8,8 @@ NovaStore is a retail e-commerce modernization initiative focused on transformin
 
 The application is a full-stack retail e-commerce application designed to deliver a scalable, secure, and reliable online shopping experience through modern cloud infrastructure, automated application delivery, and resilient operational architecture. It combines a **React storefront**, **Java 17 / Spring Boot REST API**, and **PostgreSQL database** with AWS infrastructure, automated delivery pipelines, container orchestration, configuration management, security scanning, and observability.
 
+![NovaStore Retail E-Commerce Storefront](docs/images/novastore-storefront.png)
+
 ## Business Problem
 
 Traditional application environments face several recurring operational challenges:
