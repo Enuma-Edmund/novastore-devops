@@ -53,14 +53,53 @@ The repository contains both ECS/Fargate and EKS implementation paths. These rep
 
 ## How NovaStore Works
 
-NovaStore illustrates the path from an application change to a controlled cloud release. The repository includes alternative ECS/Fargate and EKS deployment configurations; these are not claims that both environments are currently running.
+NovaStore demonstrates two AWS container deployment approaches built around a shared application delivery process.
 
-1. **Develop:** React storefront, Spring Boot API, and PostgreSQL changes are maintained in Git.
-2. **Validate:** GitHub Actions and Jenkins workflows build, test, and perform configured security checks.
-3. **Package:** Docker packages the Java service; Amazon ECR is the configured container registry.
-4. **Deploy:** ECS/Fargate and EKS provide different container deployment approaches. Helm packages Kubernetes resources and Argo CD defines GitOps reconciliation.
-5. **Operate:** Ansible automates Linux server configuration and maintenance; CloudWatch, Prometheus, and Grafana support operational visibility.
-6. **Investigate:** Eight case studies document troubleshooting decisions and distinguish confirmed fixes from diagnostic procedures.
+### Shared CI/CD Workflow
+
+1. **Source Control:** Developers push application and infrastructure changes to GitHub.
+2. **Continuous Integration:** GitHub Actions or Jenkins runs configured builds, automated tests, and security checks.
+3. **Containerization:** Docker packages the Java Spring Boot application into a deployable image.
+4. **Image Registry:** Amazon ECR stores versioned container images for deployment.
+5. **Infrastructure:** Terraform defines the AWS networking, security, compute, and container platform resources.
+
+### Deployment Path 1 — Amazon ECS / Fargate
+
+**Request flow:** Internet → Application Load Balancer → ECS Service → Fargate Task → Spring Boot Application
+
+- Terraform defines the ECS cluster, task definitions, services, networking, IAM, and load-balancing resources.
+- ECS manages the desired number of running tasks and replaces failed tasks.
+- Fargate provides container compute without requiring engineers to manage EC2 worker nodes.
+- The ALB routes incoming requests to healthy application targets.
+- ECS service autoscaling configuration supports adjusting task capacity based on demand.
+
+**Engineering decision:** ECS/Fargate is a practical choice when an application needs managed container deployment and scaling without the additional operational complexity of Kubernetes.
+
+**Implementation:** [ECS Terraform modules](terraform/modules/ecs/)
+
+### Deployment Path 2 — Amazon EKS / Kubernetes
+
+**Request flow:** Internet → ALB → Kubernetes Ingress → Service → Pod → Spring Boot Application
+
+- Terraform defines the EKS cluster and supporting infrastructure.
+- Kubernetes Deployments manage application replicas and replace unhealthy Pods.
+- Helm packages application manifests and configuration into a reusable chart.
+- Argo CD defines GitOps reconciliation between Git and the desired Kubernetes application state.
+- Kubernetes Services and Ingress resources define how traffic reaches the application.
+- Health probes and Horizontal Pod Autoscaler configuration support workload health and scaling.
+
+**Engineering decision:** EKS is appropriate when teams need Kubernetes capabilities, declarative workload management, extensibility, or a standardized platform shared across multiple applications.
+
+**Implementation:** [EKS Terraform modules](terraform/modules/eks/) | [Helm chart](helm/java-app/) | [Argo CD application](argocd/novastore-java.yaml)
+
+### Operations, Security & Troubleshooting
+
+- **Ansible:** Configures and maintains Linux servers through repeatable automation.
+- **CloudWatch, Prometheus, Grafana:** Provide monitoring and operational visibility.
+- **Gitleaks, Trivy, Checkov, SonarQube:** Support security and code-quality checks.
+- **Troubleshooting:** Eight engineering investigations document deployment, IAM, networking, container, and GitOps issues.
+
+**Deployment status:** Both paths are represented in the repository. AWS resources are currently shut down to control costs; this section describes the configured architecture rather than an active public deployment.
 
 ## Engineering Decisions — Why These Tools?
 
