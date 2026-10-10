@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+
+# Environment variables / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Java / Maven
+target/
+*.jar
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+.vagrant/
+
+# Vagrant generated files
+.vagrant/
+**/.vagrant/
+
+# Local Terraform variable values
+*.tfvars
+*.tfvars.json
+!*.tfvars.example

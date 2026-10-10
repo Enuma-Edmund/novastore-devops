@@ -1,0 +1,50 @@
+---
+- name: Configure NovaStore Linux servers
+  hosts: linux_servers
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update apt package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install Nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: Deploy NovaStore web page
+      ansible.builtin.copy:
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          <html>
+          <body>
+            <h1>NovaStore</h1>
+            <p>This Linux server is configured and managed by Ansible.</p>
+          </body>
+          </html>
+
+    - name: Ensure Nginx is running and enabled
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Verify Nginx locally
+      ansible.builtin.uri:
+        url: http://localhost
+        status_code: 200
+    - name: Apply available security and package updates
+      ansible.builtin.apt:
+        upgrade: safe
+        update_cache: true
+      register: patch_result
+
+    - name: Report patching result
+      ansible.builtin.debug:
+        msg: "Server patching completed. Changed: {{ patch_result.changed }}"

@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novastore-java
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: novastore-java
+  template:
+    metadata:
+      labels:
+        app: novastore-java
+    spec:
+      containers:
+        - name: novastore-java
+          image: 123456789012.dkr.ecr.us-east-2.amazonaws.com/novastore-dev-app:215b16fb43669bfb6e516f44d459b0744464d03f
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20

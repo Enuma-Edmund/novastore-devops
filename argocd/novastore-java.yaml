@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: novastore-java
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Enuma-Edmund/novastore-devops.git
+    targetRevision: feature/retail-fullstack
+    path: helm/java-app
+    helm:
+      releaseName: novastore
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

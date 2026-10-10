@@ -1,0 +1,26 @@
+plugin: amazon.aws.aws_ec2
+
+regions:
+  - us-east-2
+
+filters:
+  instance-state-name: running
+
+hostnames:
+  - instance-id
+
+compose:
+  ansible_host: private_ip_address
+
+keyed_groups:
+  - key: ec2_tags.Name
+    prefix: name
+
+  - key: ec2_tags.Project
+    prefix: project
+
+  - key: ec2_tags.Environment  # gitleaks:allow
+    prefix: environment
+
+  - key: placement.availability_zone
+    prefix: az
